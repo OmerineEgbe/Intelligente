@@ -1,334 +1,229 @@
-'use client'
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { MessageSquare, GraduationCap, Briefcase, Map, ArrowRight, Sparkles, User } from 'lucide-react'
 
-import { useState, useRef, useEffect } from 'react'
-import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport } from 'ai'
-import {
-  BrainCircuit,
-  Plus,
-  Send,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-  Square,
-  ChevronDown,
-} from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { signOut, useSession } from '@/lib/auth-client'
+export default async function DashboardHomePage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-const suggestions = [
-  'What programs suit someone interested in AI and technology?',
-  'Help me explore careers in business management.',
-  'What is the entry requirement for the MSc Data Science?',
-  'Compare Software Engineering vs Computer Science at LMUI.',
-]
+  const userName = user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'Student'
+  const firstName = userName.split(' ')[0]
 
-export default function DashboardPage() {
-  const router = useRouter()
-  const session = useSession()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [conversations, setConversations] = useState<{ id: string; title: string }[]>([])
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [input, setInput] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  // Fetch latest trait profile
+  const { data: traitProfile } = await supabase
+    .from('trait_profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
 
-  useEffect(() => {
-    if (session && !session?.data?.user) {
-      router.push('/sign-in')
-    }
-  }, [session?.data?.user, router])
+  // Fetch latest recommendation
+  const { data: recommendation } = await supabase
+    .from('recommendations')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_alternative', false)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
 
-  const { messages, sendMessage, status, stop } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/chat' }),
-  })
+  // Fetch latest roadmap
+  const { data: roadmap } = await supabase
+    .from('roadmaps')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
 
-  const isLoading = status === 'streaming' || status === 'submitted'
+  // Fetch recent conversations
+  const { data: recentSessions } = await supabase
+    .from('conversation_sessions')
+    .select('id, started_at, ended_at')
+    .eq('user_id', user.id)
+    .order('started_at', { ascending: false })
+    .limit(3)
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  // Save first message as conversation title
-  useEffect(() => {
-    if (messages.length === 2 && conversations.length === 0) {
-      const aiMsg = messages.find((m) => m.role === 'assistant')
-      if (aiMsg) {
-        const text = typeof aiMsg.content === 'string'
-          ? aiMsg.content
-          : JSON.stringify(aiMsg.content)
-        setConversations([{ id: Date.now().toString(), title: text.slice(0, 45) + '…' }])
-      }
-    }
-  }, [messages])
-
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return
-    const text = input
-    setInput('')
-    await sendMessage({ role: 'user', content: text })
+  const hasProfile = !!traitProfile
+  const profileTypeLabels: Record<string, string> = {
+    explorer: 'Explorer',
+    pathfinder: 'Pathfinder',
+    visionary: 'Visionary',
+  }
+  const profileDescriptions: Record<string, string> = {
+    explorer: 'Open and curious. You are discovering who you are through exploration.',
+    pathfinder: 'Direction-aware. You have some sense of where you\'re headed and are seeking clarity.',
+    visionary: 'Purpose-driven. You have a clear direction and are building conviction.',
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
+  let topDegree = ''
+  let topCareer = ''
+  let immediateActions: any[] = []
+
+  if (recommendation?.explanation) {
+    try {
+      const exp = typeof recommendation.explanation === 'string'
+        ? JSON.parse(recommendation.explanation)
+        : recommendation.explanation
+      topDegree = exp.programme_name ?? ''
+      topCareer = exp.career_name ?? ''
+    } catch {}
   }
 
-  const handleLogout = async () => {
-    await signOut()
-    router.push('/sign-in')
-  }
-
-  const getMessageText = (content: any): string => {
-    if (typeof content === 'string') return content
-    if (Array.isArray(content)) {
-      return content
-        .filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
-        .join('')
-    }
-    return ''
-  }
-
-  const userName = session?.data?.user?.name ?? 'User'
-  const userInitial = userName.charAt(0).toUpperCase()
-
-  if (!session?.data?.user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-white">
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="w-2 h-2 rounded-full bg-[#0c1f4a] animate-bounce"
-              style={{ animationDelay: `${i * 0.15}s` }}
-            />
-          ))}
-        </div>
-      </div>
-    )
+  if (roadmap?.immediate_actions) {
+    immediateActions = Array.isArray(roadmap.immediate_actions) ? roadmap.immediate_actions.slice(0, 2) : []
   }
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
-      {/* Sidebar */}
-      <aside
-        className={`${
-          sidebarOpen ? 'w-64' : 'w-0'
-        } flex-shrink-0 transition-[width] duration-300 overflow-hidden bg-[#0c1f4a] flex flex-col`}
-      >
-        <div className="flex flex-col h-full p-4 min-w-64">
-          <div className="flex items-center justify-between mb-6 mt-1">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
-                <BrainCircuit size={14} className="text-white" />
-              </div>
-              <span className="font-bold text-white">Intelligente</span>
-            </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="text-white/40 hover:text-white transition-colors lg:hidden"
-            >
-              <X size={18} />
-            </button>
-          </div>
+    <div className="p-6 md:p-8 max-w-5xl mx-auto">
+      {/* Welcome */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-[#0c1f4a] mb-1">
+          Welcome back, {firstName}
+        </h1>
+        <p className="text-[#64748b] text-sm">
+          {hasProfile
+            ? 'Your guidance profile is ready. Explore your results below.'
+            : 'Start a conversation to discover your ideal degree and career path.'}
+        </p>
+      </div>
 
-          <button
-            onClick={() => window.location.reload()}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-white/10 text-white/80 hover:bg-white/10 hover:text-white transition-colors text-sm mb-6"
+      {!hasProfile ? (
+        /* No profile yet - CTA */
+        <div className="bg-[#0c1f4a] rounded-2xl p-8 text-center mb-8">
+          <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-4">
+            <Sparkles size={24} className="text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Ready to discover your path?</h2>
+          <p className="text-white/60 text-sm mb-6 max-w-sm mx-auto">
+            Have a real conversation with Intelligente. It takes 8–12 minutes and gives you a personalised profile, degree match, and roadmap.
+          </p>
+          <Link
+            href="/chat"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#0c1f4a] rounded-xl font-semibold text-sm hover:bg-blue-50 transition-colors"
           >
-            <Plus size={16} />
-            New Conversation
-          </button>
-
-          <div className="flex-1 overflow-y-auto space-y-1 mb-6">
-            <p className="text-white/30 text-xs uppercase tracking-widest mb-2 px-1">History</p>
-            {conversations.length === 0 ? (
-              <p className="text-white/30 text-xs px-1 py-4 text-center">No conversations yet</p>
-            ) : (
-              conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  className="w-full text-left px-3 py-2 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors text-sm truncate"
-                >
-                  {conv.title}
-                </button>
-              ))
-            )}
+            Start the Conversation
+            <ArrowRight size={16} />
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+          {/* Discovery Profile Card */}
+          <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <User size={16} className="text-[#64748b]" />
+              <span className="text-xs text-[#64748b] font-medium uppercase tracking-wide">Discovery Profile</span>
+            </div>
+            <div className="mb-2">
+              <span className="inline-block px-3 py-1 rounded-full bg-[#dbeafe] text-[#1a3461] text-xs font-semibold">
+                {profileTypeLabels[traitProfile.profile_type] ?? traitProfile.profile_type}
+              </span>
+            </div>
+            <p className="text-sm text-[#64748b] leading-relaxed">
+              {profileDescriptions[traitProfile.profile_type] ?? ''}
+            </p>
+            <Link href="/dashboard/profile" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a3461] font-medium hover:underline">
+              View full profile <ArrowRight size={12} />
+            </Link>
           </div>
 
-          <div className="border-t border-white/10 pt-4 space-y-1">
-            <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors text-sm">
-              <Settings size={16} />
-              Settings
-            </button>
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors text-sm"
-            >
-              <LogOut size={16} />
-              Sign Out
-            </button>
+          {/* Degree Match */}
+          <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap size={16} className="text-[#64748b]" />
+              <span className="text-xs text-[#64748b] font-medium uppercase tracking-wide">Top Degree Match</span>
+            </div>
+            {topDegree ? (
+              <>
+                <p className="font-semibold text-[#0c1f4a] text-sm mb-1">{topDegree}</p>
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${recommendation?.fit_verdict === 'strong_fit' ? 'bg-green-50 text-green-700' : recommendation?.fit_verdict === 'conditional_fit' ? 'bg-yellow-50 text-yellow-700' : 'bg-red-50 text-red-700'}`}>
+                  {recommendation?.fit_verdict?.replace('_', ' ')}
+                </span>
+              </>
+            ) : (
+              <p className="text-sm text-[#94a3b8]">No degree match yet</p>
+            )}
+            <Link href="/dashboard/degree-recommendation" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a3461] font-medium hover:underline">
+              View details <ArrowRight size={12} />
+            </Link>
+          </div>
+
+          {/* Career Match */}
+          <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Briefcase size={16} className="text-[#64748b]" />
+              <span className="text-xs text-[#64748b] font-medium uppercase tracking-wide">Top Career Match</span>
+            </div>
+            {topCareer ? (
+              <p className="font-semibold text-[#0c1f4a] text-sm mb-1">{topCareer}</p>
+            ) : (
+              <p className="text-sm text-[#94a3b8]">No career match yet</p>
+            )}
+            <Link href="/dashboard/career-recommendation" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a3461] font-medium hover:underline">
+              View details <ArrowRight size={12} />
+            </Link>
           </div>
         </div>
-      </aside>
+      )}
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-[#e2e8f0] bg-white flex-shrink-0">
-          <div className="flex items-center gap-3">
-            {!sidebarOpen && (
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="text-[#64748b] hover:text-[#0c1f4a] transition-colors"
-              >
-                <Menu size={20} />
-              </button>
-            )}
-            <span className="font-semibold text-[#0c1f4a] text-sm">Guidance Journey</span>
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[#f1f5f9] transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full bg-[#0c1f4a] flex items-center justify-center text-white text-sm font-semibold">
-                {userInitial}
-              </div>
-              <span className="text-sm text-[#0c1f4a] font-medium hidden sm:block">{userName}</span>
-              <ChevronDown size={14} className="text-[#94a3b8]" />
-            </button>
-
-            {userMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-[#e2e8f0] rounded-xl shadow-lg py-1 z-50">
-                <div className="px-4 py-2 border-b border-[#e2e8f0]">
-                  <p className="text-xs font-semibold text-[#0c1f4a]">{userName}</p>
-                  <p className="text-xs text-[#94a3b8] truncate">{session?.data?.user?.email}</p>
-                </div>
-                <button
-                  onClick={() => { setUserMenuOpen(false); handleLogout() }}
-                  className="w-full text-left px-4 py-2 text-sm text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0c1f4a] flex items-center gap-2 transition-colors"
-                >
-                  <LogOut size={14} />
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
-        </header>
-
-        {/* Chat area */}
-        <div className="flex-1 overflow-y-auto">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full px-6 py-12 text-center">
-              <div className="w-16 h-16 rounded-full bg-[#0c1f4a] flex items-center justify-center mb-6 shadow-md">
-                <BrainCircuit size={32} className="text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-[#0c1f4a] mb-3">
-                How can I help you today?
-              </h2>
-              <p className="text-[#64748b] max-w-md mb-10 text-sm leading-relaxed">
-                I&apos;m your personal AI advisor at LMUI. Ask me anything about programs, career paths, admissions, or scholarships.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl w-full">
-                {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => { setInput(s); inputRef.current?.focus() }}
-                    className="text-left px-4 py-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-sm text-[#0c1f4a] hover:border-[#1a3461] hover:bg-[#dbeafe]/30 transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Roadmap preview */}
+        <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Map size={16} className="text-[#64748b]" />
+              <span className="text-sm font-semibold text-[#0c1f4a]">Roadmap</span>
             </div>
+            <Link href="/dashboard/roadmap" className="text-xs text-[#1a3461] hover:underline">View all</Link>
+          </div>
+          {immediateActions.length > 0 ? (
+            <ul className="space-y-2">
+              {immediateActions.map((action: any, i: number) => (
+                <li key={i} className="flex items-start gap-2.5 text-sm">
+                  <div className="w-5 h-5 rounded-full bg-[#dbeafe] flex items-center justify-center text-[10px] font-bold text-[#1a3461] flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </div>
+                  <span className="text-[#0c1f4a]">{action.action}</span>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-              {messages.map((msg, idx) => {
-                const text = getMessageText(msg.content)
-                return (
-                  <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold
-                      ${msg.role === 'user' ? 'bg-[#0c1f4a] text-white' : 'bg-[#dbeafe] text-[#1a3461]'}`}>
-                      {msg.role === 'user' ? userInitial : <BrainCircuit size={14} />}
-                    </div>
-                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap
-                      ${msg.role === 'user'
-                        ? 'bg-[#0c1f4a] text-white rounded-tr-sm'
-                        : 'bg-[#f1f5f9] text-[#0c1f4a] rounded-tl-sm border border-[#e2e8f0]'
-                      }`}>
-                      {text}
-                    </div>
-                  </div>
-                )
-              })}
-
-              {isLoading && (
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#dbeafe] flex items-center justify-center">
-                    <BrainCircuit size={14} className="text-[#1a3461]" />
-                  </div>
-                  <div className="bg-[#f1f5f9] border border-[#e2e8f0] px-4 py-3 rounded-2xl rounded-tl-sm">
-                    <div className="flex gap-1.5">
-                      {[0, 1, 2].map((i) => (
-                        <div key={i} className="w-2 h-2 rounded-full bg-[#0c1f4a]/40 animate-bounce"
-                          style={{ animationDelay: `${i * 0.15}s` }} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={scrollRef} />
-            </div>
+            <p className="text-sm text-[#94a3b8]">Complete a conversation to generate your roadmap.</p>
           )}
         </div>
 
-        {/* Input */}
-        <div className="border-t border-[#e2e8f0] bg-white px-4 py-4 flex-shrink-0">
-          <div className="max-w-3xl mx-auto">
-            <div className="relative flex items-end gap-2 bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl px-4 py-3 focus-within:border-[#1a3461] focus-within:ring-2 focus-within:ring-[#1a3461]/10 transition-all">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value)
-                  e.target.style.height = 'auto'
-                  e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask about programs, careers, admissions…"
-                rows={1}
-                disabled={isLoading}
-                className="flex-1 bg-transparent resize-none text-sm text-[#0c1f4a] placeholder-[#94a3b8] focus:outline-none max-h-40 leading-relaxed"
-              />
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {isLoading ? (
-                  <button
-                    onClick={() => stop()}
-                    className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#0c1f4a]/10 hover:bg-[#0c1f4a]/20 transition-colors"
-                  >
-                    <Square size={14} className="text-[#0c1f4a]" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSend}
-                    disabled={!input.trim()}
-                    className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#0c1f4a] hover:bg-[#1a3461] text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Send size={15} />
-                  </button>
-                )}
-              </div>
+        {/* Recent conversations */}
+        <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={16} className="text-[#64748b]" />
+              <span className="text-sm font-semibold text-[#0c1f4a]">Recent Conversations</span>
             </div>
-            <p className="text-center text-[10px] text-[#c0ccd8] mt-2">
-              Intelligente can make mistakes. Important decisions should be verified with an academic advisor.
-            </p>
+            <Link href="/dashboard/my-conversations" className="text-xs text-[#1a3461] hover:underline">View all</Link>
           </div>
+          {recentSessions && recentSessions.length > 0 ? (
+            <ul className="space-y-2">
+              {recentSessions.map((session: any) => (
+                <li key={session.id} className="flex items-center justify-between text-sm py-1.5 border-b border-[#f1f5f9] last:border-0">
+                  <span className="text-[#0c1f4a] truncate">Discovery Session</span>
+                  <span className="text-[#94a3b8] text-xs flex-shrink-0 ml-2">
+                    {new Date(session.started_at).toLocaleDateString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-sm text-[#94a3b8] mb-3">No conversations yet.</p>
+              <Link href="/chat" className="inline-flex items-center gap-1.5 text-sm text-[#1a3461] font-medium hover:underline">
+                <MessageSquare size={14} />
+                Start a conversation
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

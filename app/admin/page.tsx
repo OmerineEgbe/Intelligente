@@ -1,91 +1,45 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signOut } from '@/lib/auth-client'
-import { ChevronDown, LogOut, Plus, Settings } from 'lucide-react'
-import Link from 'next/link'
-
-interface School {
-  id: string
-  name: string
-  description: string
-}
-
-interface Department {
-  id: string
-  schoolid: string
-  name: string
-  description: string
-}
-
-interface Program {
-  id: string
-  departmentid: string
-  name: string
-  level: string
-  description: string
-}
+import { createClient } from '@/lib/supabase/client'
+import { LogOut, Plus } from 'lucide-react'
+import { useState } from 'react'
 
 export default function AdminPage() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'schools' | 'departments' | 'programs' | 'careers'>('schools')
-  const [schools, setSchools] = useState<School[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
-  const [programs, setPrograms] = useState<Program[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Fetch data
-    setLoading(false)
-  }, [])
+  const [activeTab, setActiveTab] = useState<'schools' | 'programmes' | 'careers'>('schools')
 
   const handleLogout = async () => {
-    await signOut()
-    router.push('/sign-in')
-  }
-
-  const handleDashboard = () => {
-    router.push('/dashboard')
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-8 py-6 border-b border-border bg-surface sticky top-0">
+    <div className="flex flex-col h-screen bg-white">
+      <div className="flex items-center justify-between px-8 py-5 border-b border-[#e2e8f0] bg-white sticky top-0">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Intelligente Admin</h1>
-          <p className="text-sm text-muted-foreground">Manage academic programs and career paths</p>
+          <h1 className="text-xl font-bold text-[#0c1f4a]">Intelligente Admin</h1>
+          <p className="text-xs text-[#64748b]">Manage academic programmes and career paths</p>
         </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleDashboard}
-            className="px-4 py-2 rounded-lg bg-surface-secondary hover:bg-border text-foreground font-medium transition-colors text-sm"
-          >
-            Back to Dashboard
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.push('/dashboard')} className="text-sm px-4 py-2 rounded-lg border border-[#e2e8f0] text-[#0c1f4a] hover:bg-[#f8fafc] transition-colors">
+            Dashboard
           </button>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-foreground hover:bg-surface-secondary transition-colors text-sm"
-          >
-            <LogOut size={16} />
-            Sign Out
+          <button onClick={handleLogout} className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg text-[#64748b] hover:bg-[#f8fafc] transition-colors">
+            <LogOut size={15} /> Sign Out
           </button>
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto p-8">
-        {/* Tabs */}
-        <div className="flex gap-2 mb-8 border-b border-border">
-          {(['schools', 'departments', 'programs', 'careers'] as const).map((tab) => (
+        <div className="flex gap-1 mb-8 border-b border-[#e2e8f0]">
+          {(['schools', 'programmes', 'careers'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-3 font-medium text-sm transition-colors capitalize ${
-                activeTab === tab
-                  ? 'text-accent border-b-2 border-accent'
-                  : 'text-muted-foreground hover:text-foreground'
+              className={`px-4 py-3 font-medium text-sm capitalize transition-colors ${
+                activeTab === tab ? 'text-[#0c1f4a] border-b-2 border-[#0c1f4a]' : 'text-[#94a3b8] hover:text-[#0c1f4a]'
               }`}
             >
               {tab}
@@ -93,76 +47,16 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* Content Area */}
-        <div className="max-w-6xl mx-auto">
-          {activeTab === 'schools' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-foreground">Schools</h2>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-secondary text-accent-foreground font-medium transition-colors">
-                  <Plus size={18} />
-                  Add School
-                </button>
-              </div>
-              <div className="bg-surface border border-border rounded-lg p-6">
-                <p className="text-muted-foreground">
-                  {loading ? 'Loading schools...' : 'Schools from the database will appear here'}
-                </p>
-                {/* Schools list will be rendered here */}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'departments' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-foreground">Departments</h2>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-secondary text-accent-foreground font-medium transition-colors">
-                  <Plus size={18} />
-                  Add Department
-                </button>
-              </div>
-              <div className="bg-surface border border-border rounded-lg p-6">
-                <p className="text-muted-foreground">
-                  {loading ? 'Loading departments...' : 'Departments from the database will appear here'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'programs' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-foreground">Degree Programs</h2>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-secondary text-accent-foreground font-medium transition-colors">
-                  <Plus size={18} />
-                  Add Program
-                </button>
-              </div>
-              <div className="bg-surface border border-border rounded-lg p-6">
-                <p className="text-muted-foreground">
-                  {loading ? 'Loading programs...' : 'Degree programs from the database will appear here'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'careers' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-foreground">Career Paths</h2>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-secondary text-accent-foreground font-medium transition-colors">
-                  <Plus size={18} />
-                  Add Career Path
-                </button>
-              </div>
-              <div className="bg-surface border border-border rounded-lg p-6">
-                <p className="text-muted-foreground">
-                  {loading ? 'Loading career paths...' : 'Career paths from the database will appear here'}
-                </p>
-              </div>
-            </div>
-          )}
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-[#0c1f4a] capitalize">{activeTab}</h2>
+            <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0c1f4a] text-white text-sm font-medium hover:bg-[#1a3461] transition-colors">
+              <Plus size={16} /> Add
+            </button>
+          </div>
+          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-8 text-center text-sm text-[#94a3b8]">
+            Admin content for {activeTab} will appear here.
+          </div>
         </div>
       </div>
     </div>

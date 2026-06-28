@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { authClient } from '@/lib/auth-client'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { BrainCircuit, Eye, EyeOff } from 'lucide-react'
+
 
 interface AuthFormProps {
   mode: 'sign-in' | 'sign-up'
@@ -18,6 +19,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,18 +28,20 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === 'sign-up') {
-        const res = await authClient.signUp.email({
+        const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
-          name: name || email.split('@')[0],
+          options: {
+            data: { full_name: name || email.split('@')[0] },
+          },
         })
-        if (res.error) throw new Error(res.error.message)
+        if (signUpError) throw signUpError
+        router.push('/welcome')
       } else {
-        const res = await authClient.signIn.email({ email, password })
-        if (res.error) throw new Error(res.error.message)
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+        if (signInError) throw signInError
+        router.push('/dashboard')
       }
-      router.push(mode === 'sign-up' ? '/welcome' : '/dashboard')
-      router.refresh()
     } catch (err: any) {
       setError(err.message || 'An error occurred. Please try again.')
     } finally {
@@ -47,18 +51,18 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      {/* Left panel — navy brand */}
+      {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#0c1f4a] flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
             <BrainCircuit size={18} className="text-white" />
           </div>
           <span className="font-bold text-lg text-white">Intelligente</span>
-        </div>
+        </Link>
 
         <div>
           <blockquote className="text-white/80 text-lg leading-relaxed mb-4">
-            &ldquo;Intelligente helped me discover that I was perfectly suited for Data Science — something I never would have considered on my own.&rdquo;
+            &ldquo;Intelligente helped me discover that I was perfectly suited for Data Science, something I never would have considered on my own.&rdquo;
           </blockquote>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm">
@@ -76,16 +80,15 @@ export function AuthForm({ mode }: AuthFormProps) {
         </p>
       </div>
 
-      {/* Right panel — form */}
+      {/* Right panel */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="flex lg:hidden items-center gap-2 mb-8">
+          <Link href="/" className="flex lg:hidden items-center gap-2 mb-8">
             <div className="w-8 h-8 rounded-full bg-[#0c1f4a] flex items-center justify-center">
               <BrainCircuit size={15} className="text-white" />
             </div>
             <span className="font-bold text-[#0c1f4a]">Intelligente</span>
-          </div>
+          </Link>
 
           <div className="bg-white rounded-2xl shadow-sm border border-[#e2e8f0] p-8">
             <div className="mb-8">
@@ -143,7 +146,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={loading}
-                    minLength={8}
+                    minLength={6}
                     className="w-full px-4 py-2.5 pr-10 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-[#0c1f4a] placeholder-[#94a3b8] text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3461] focus:border-transparent transition"
                   />
                   <button
@@ -155,7 +158,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                   </button>
                 </div>
                 {mode === 'sign-up' && (
-                  <p className="text-xs text-[#94a3b8] mt-1">Minimum 8 characters</p>
+                  <p className="text-xs text-[#94a3b8] mt-1">Minimum 6 characters</p>
                 )}
               </div>
 
@@ -179,7 +182,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             <p className="text-center text-sm text-[#64748b] mt-6">
               {mode === 'sign-in' ? "Don't have an account? " : 'Already have an account? '}
               <Link
-                href={mode === 'sign-in' ? '/sign-up' : '/sign-in'}
+                href={mode === 'sign-in' ? '/register' : '/login'}
                 className="text-[#1a3461] font-medium hover:underline"
               >
                 {mode === 'sign-in' ? 'Create one' : 'Sign in'}

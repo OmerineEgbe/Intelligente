@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useSession } from '@/lib/auth-client'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   BrainCircuit,
   Sparkles,
@@ -14,7 +13,14 @@ import {
   GraduationCap,
   Target,
   Compass,
+  Menu,
+  X,
+  LayoutDashboard,
+  MessageCircle,
+  User,
+  LogOut,
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 const faqs = [
   {
@@ -23,7 +29,7 @@ const faqs = [
   },
   {
     q: 'Do I need a detailed profile to get started?',
-    a: 'No — you can begin a conversation immediately and build your profile as you go. The more context you share, the more personalised the guidance.',
+    a: 'No. You can begin a conversation immediately and build your profile as you go. The more context you share, the more personalised the guidance.',
   },
   {
     q: 'Is the platform free for students?',
@@ -41,47 +47,201 @@ const faqs = [
 
 export default function LandingPage() {
   const router = useRouter()
-  const session = useSession()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [user, setUser] = useState<{ name: string; email: string; initial: string } | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  const accountDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (session?.data?.user) {
-      router.push('/dashboard')
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (u) {
+        const name = u.user_metadata?.full_name ?? u.email?.split('@')[0] ?? 'Student'
+        setUser({ name, email: u.email ?? '', initial: name.charAt(0).toUpperCase() })
+      }
+      setAuthChecked(true)
+    })
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (accountDropdownRef.current && !accountDropdownRef.current.contains(e.target as Node)) {
+        setAccountOpen(false)
+      }
     }
-  }, [session?.data?.user, router])
+    if (accountOpen) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [accountOpen])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    setUser(null)
+    setAccountOpen(false)
+    router.refresh()
+  }
 
   return (
     <div className="min-h-screen bg-white text-[#0c1f4a] font-sans">
       {/* Announcement bar */}
       <div className="bg-[#0c1f4a] text-white text-center text-xs py-2 px-4">
-        Intelligente v1.0 is now live — AI-powered guidance for LMUI students
+        Intelligente v1.0 is now live. AI-powered guidance for LMUI students.
       </div>
 
       {/* Nav */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-[#e2e8f0]">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-[#0c1f4a] flex items-center justify-center">
               <BrainCircuit size={16} className="text-white" />
             </div>
             <span className="font-bold text-lg text-[#0c1f4a]">Intelligente</span>
-          </div>
+          </Link>
+
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8 text-sm text-[#64748b]">
-            <a href="#features" className="hover:text-[#0c1f4a] transition-colors">Features</a>
-            <a href="#faq" className="hover:text-[#0c1f4a] transition-colors">FAQ</a>
+            <Link href="/how-it-works" className="hover:text-[#0c1f4a] transition-colors">How It Works</Link>
+            <Link href="/features" className="hover:text-[#0c1f4a] transition-colors">Features</Link>
+            <Link href="/pricing" className="hover:text-[#0c1f4a] transition-colors">Pricing</Link>
           </nav>
-          <div className="flex items-center gap-3">
-            <Link href="/sign-in" className="text-sm text-[#0c1f4a] hover:text-[#1a3461] font-medium transition-colors">
-              Sign In
-            </Link>
-            <Link
-              href="/sign-up"
-              className="text-sm px-4 py-2 rounded-lg bg-[#0c1f4a] text-white hover:bg-[#1a3461] font-medium transition-colors"
-            >
-              Get Started
-            </Link>
+
+          {/* Desktop buttons / account */}
+          <div className="hidden md:flex items-center gap-3">
+            {authChecked && (
+              user ? (
+                /* Logged-in: account dropdown */
+                <div className="relative" ref={accountDropdownRef}>
+                  <button
+                    onClick={() => setAccountOpen(!accountOpen)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#e2e8f0] text-sm text-[#0c1f4a] font-medium hover:bg-[#f8fafc] transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-[#0c1f4a] flex items-center justify-center text-white text-xs font-semibold">
+                      {user.initial}
+                    </div>
+                    {user.name.split(' ')[0]}
+                    <ChevronDown size={14} className={`text-[#94a3b8] transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {accountOpen && (
+                    <div className="absolute right-0 top-11 z-50 w-56 bg-white rounded-xl shadow-xl border border-[#e2e8f0] overflow-hidden">
+                        <div className="px-4 py-3 border-b border-[#f1f5f9]">
+                          <p className="text-sm font-semibold text-[#0c1f4a] truncate">{user.name}</p>
+                          <p className="text-xs text-[#94a3b8] truncate">{user.email}</p>
+                        </div>
+                        <div className="py-1.5">
+                          <Link href="/dashboard" onClick={() => setAccountOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                            <LayoutDashboard size={14} className="text-[#64748b]" />
+                            Dashboard
+                          </Link>
+                          <Link href="/dashboard/profile" onClick={() => setAccountOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                            <User size={14} className="text-[#64748b]" />
+                            My Profile
+                          </Link>
+                          <Link href="/chat" onClick={() => setAccountOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                            <MessageCircle size={14} className="text-[#64748b]" />
+                            New Conversation
+                          </Link>
+                        </div>
+                        <div className="border-t border-[#f1f5f9] py-1.5">
+                          <button onClick={handleLogout} className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                            <LogOut size={14} />
+                            Sign Out
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Logged-out: login + get started */
+                <>
+                  <Link href="/login" className="text-sm text-[#0c1f4a] hover:text-[#1a3461] font-medium transition-colors">
+                    Login
+                  </Link>
+                  <Link href="/register" className="text-sm px-4 py-2 rounded-lg bg-[#0c1f4a] text-white hover:bg-[#1a3461] font-medium transition-colors">
+                    Get Started
+                  </Link>
+                </>
+              )
+            )}
           </div>
+
+          {/* Mobile: hamburger */}
+          <button
+            className="md:hidden p-2 rounded-lg text-[#0c1f4a] hover:bg-[#f1f5f9] transition-colors"
+            onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            aria-label="Toggle menu"
+          >
+            {mobileNavOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
+
+        {/* Mobile dropdown */}
+        {mobileNavOpen && (
+          <div className="md:hidden border-t border-[#e2e8f0] bg-white px-5 py-4 space-y-1">
+            {[
+              { href: '/how-it-works', label: 'How It Works' },
+              { href: '/features', label: 'Features' },
+              { href: '/pricing', label: 'Pricing' },
+            ].map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setMobileNavOpen(false)}
+                className="block px-3 py-3 rounded-lg text-sm text-[#64748b] hover:text-[#0c1f4a] hover:bg-[#f8fafc] transition-colors"
+              >
+                {label}
+              </Link>
+            ))}
+
+            <div className="border-t border-[#e2e8f0] pt-3 mt-3">
+              {authChecked && (
+                user ? (
+                  /* Logged-in mobile actions */
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3 px-3 py-2 mb-1">
+                      <div className="w-8 h-8 rounded-full bg-[#0c1f4a] flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                        {user.initial}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[#0c1f4a] truncate">{user.name}</p>
+                        <p className="text-xs text-[#94a3b8] truncate">{user.email}</p>
+                      </div>
+                    </div>
+                    <Link href="/dashboard" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                      <LayoutDashboard size={14} className="text-[#64748b]" />
+                      Dashboard
+                    </Link>
+                    <Link href="/dashboard/profile" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                      <User size={14} className="text-[#64748b]" />
+                      My Profile
+                    </Link>
+                    <Link href="/chat" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                      <MessageCircle size={14} className="text-[#64748b]" />
+                      New Conversation
+                    </Link>
+                    <button onClick={() => { handleLogout(); setMobileNavOpen(false) }} className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors">
+                      <LogOut size={14} />
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  /* Logged-out mobile: login + register */
+                  <div className="grid grid-cols-2 gap-2">
+                    <Link href="/login" onClick={() => setMobileNavOpen(false)} className="flex items-center justify-center px-4 py-2.5 rounded-lg border border-[#e2e8f0] text-sm text-[#0c1f4a] font-medium hover:bg-[#f8fafc] transition-colors">
+                      Login
+                    </Link>
+                    <Link href="/register" onClick={() => setMobileNavOpen(false)} className="flex items-center justify-center px-4 py-2.5 rounded-lg bg-[#0c1f4a] text-sm text-white font-medium hover:bg-[#1a3461] transition-colors">
+                      Get Started
+                    </Link>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Hero */}
@@ -91,38 +251,40 @@ export default function LandingPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] rounded-full bg-[#0c1f4a]/5 blur-3xl" />
         </div>
 
-        <div className="relative max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
-          <div className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border border-[#0c1f4a]/20 text-[#1a3461] mb-8">
+        <div className="relative max-w-6xl mx-auto px-5 pt-16 pb-16 md:pt-24 md:pb-20 text-center">
+          <div className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border border-[#0c1f4a]/20 text-[#1a3461] mb-6 md:mb-8">
             <Sparkles size={12} />
             AI-Powered Academic Guidance
           </div>
 
-          <h1 className="text-5xl md:text-6xl font-bold leading-tight text-[#0c1f4a] mb-6">
-            Find Your Path with{' '}
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight text-[#0c1f4a] mb-5 md:mb-6">
+            Stop guessing{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1a3461] to-[#3b82f6]">
-              AI Precision
+              what to study.
             </span>
           </h1>
 
-          <p className="text-lg text-[#64748b] max-w-xl mx-auto mb-10">
-            Intelligente scans your interests, goals, and strengths to match you with the ideal degree program and career path at Landmark Metropolitan University Institute.
+          <p className="text-lg text-[#64748b] max-w-xl mx-auto mb-3">
+            Have a real conversation. Discover the degree and career that actually fit who you are, not just your grades.
           </p>
+          <p className="text-sm text-[#94a3b8] mb-10">Currently guiding A-Level students toward LMUI.</p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/sign-up"
+              href="/register"
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-[#0c1f4a] text-white font-medium hover:bg-[#1a3461] transition-colors"
             >
-              Get Started Free
+              Start the Conversation
               <ArrowRight size={16} />
             </Link>
             <Link
-              href="/sign-in"
+              href="/login"
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-[#e2e8f0] text-[#0c1f4a] font-medium hover:bg-[#f8fafc] transition-colors"
             >
-              Sign In
+              Login
             </Link>
           </div>
+          <p className="text-xs text-[#94a3b8] mt-3">No credit card. No test. Just talk.</p>
 
           {/* Floating job cards */}
           <div className="relative mt-16 h-56 hidden md:block">
@@ -143,7 +305,7 @@ export default function LandingPage() {
                 <div className="w-6 h-6 rounded-full bg-[#dbeafe] flex items-center justify-center">
                   <Target size={12} className="text-[#1a3461]" />
                 </div>
-                <span className="text-xs font-semibold text-[#0c1f4a]">MBA — Business</span>
+                <span className="text-xs font-semibold text-[#0c1f4a]">MBA: Business</span>
               </div>
               <div className="flex gap-1">
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#dbeafe] text-[#1a3461]">Match 94%</span>
@@ -254,7 +416,7 @@ export default function LandingPage() {
                 Still have a question? Reach our support team.
               </p>
               <Link
-                href="/sign-up"
+                href="/pricing#faq"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#0c1f4a] text-[#0c1f4a] text-sm font-medium hover:bg-[#0c1f4a] hover:text-white transition-colors"
               >
                 Contact us
@@ -299,17 +461,17 @@ export default function LandingPage() {
             Join students already using Intelligente to discover their ideal academic and career path.
           </p>
           <Link
-            href="/sign-up"
+            href="/register"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-[#0c1f4a] font-semibold hover:bg-[#f1f5f9] transition-colors"
           >
-            Get Started Free
+            Start the Conversation
             <ArrowRight size={16} />
           </Link>
         </div>
       </section>
 
       <footer className="bg-[#0a1628] text-[#64748b] text-center py-6 text-xs">
-        © {new Date().getFullYear()} Intelligente — Landmark Metropolitan University Institute
+        © {new Date().getFullYear()} Intelligente · Landmark Metropolitan University Institute
       </footer>
     </div>
   )

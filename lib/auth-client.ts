@@ -1,7 +1,2 @@
-import { createAuthClient } from 'better-auth/react'
-
-export const authClient = createAuthClient()
-
-// Re-export hooks
-export const useSession = () => authClient.useSession()
-export const signOut = () => authClient.signOut()
+// Auth is now handled by Supabase — use lib/supabase/client.ts
+export {}
