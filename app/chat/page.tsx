@@ -20,6 +20,7 @@ import {
   Settings,
   LogOut,
   MessageCircle,
+  History,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -45,6 +46,8 @@ export default function ChatPage() {
   const [pipelineError, setPipelineError] = useState('')
   const [pastSessions, setPastSessions] = useState<PastSession[]>([])
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const [prevTraitProfile, setPrevTraitProfile] = useState<any>(null)
+  const prevTraitProfileIdRef = useRef<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const avatarDropdownRef = useRef<HTMLDivElement>(null)
@@ -71,12 +74,25 @@ export default function ChatPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/login'); return }
       const name = user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'Student'
       setUserName(name)
       setUserEmail(user.email ?? '')
       setUserInitial(name.charAt(0).toUpperCase())
+
+      // Load latest trait profile for continuation mode
+      const { data: prevProfile } = await supabase
+        .from('trait_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (prevProfile) {
+        setPrevTraitProfile(prevProfile)
+        prevTraitProfileIdRef.current = prevProfile.id
+      }
     })
     fetchSessions()
   }, [router, fetchSessions])
@@ -92,7 +108,14 @@ export default function ChatPage() {
   }, [sidebarOpen])
 
   const { messages, sendMessage, status, stop } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/conversation' }),
+    transport: new DefaultChatTransport({
+      api: '/api/conversation',
+      fetch: (url, options) => {
+        const id = prevTraitProfileIdRef.current
+        const fullUrl = id ? `${url}?trait_profile_id=${id}` : url
+        return fetch(fullUrl, options)
+      },
+    }),
   })
 
   const isLoading = status === 'streaming' || status === 'submitted'
@@ -156,14 +179,13 @@ export default function ChatPage() {
         body: JSON.stringify({ trait_profile, trait_profile_id }),
       })
       if (!matchRes.ok) throw new Error('Career matching failed')
-      const { matches, recommendations } = await matchRes.json()
+      const { matches, recommendation, lmui_match } = await matchRes.json()
 
       setPipelineStage('roadmap')
-      const primaryMatch = matches.find((m: any) => m.is_primary) ?? matches[0]
-      const primaryRec = recommendations[0]
+      const primaryMatch = matches?.find((m: any) => m.is_primary) ?? matches?.[0]
       const roadmapRes = await fetch('/api/build-roadmap', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primary_match: primaryMatch, recommendation_id: primaryRec.id }),
+        body: JSON.stringify({ primary_match: primaryMatch, lmui_match, recommendation_id: recommendation.id }),
       })
       if (!roadmapRes.ok) throw new Error('Roadmap generation failed')
 
@@ -247,6 +269,24 @@ export default function ChatPage() {
               <Plus size={16} />
               New Conversation
             </button>
+
+            {/* Returning student banner */}
+            {prevTraitProfile && (
+              <div className="mb-3 rounded-lg bg-white/5 border border-white/10 px-3 py-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <History size={13} className="text-[#93c5fd] flex-shrink-0" />
+                  <span className="text-xs font-semibold text-white/80">Returning Student</span>
+                  {prevTraitProfile.profile_type && (
+                    <span className="ml-auto flex-shrink-0 px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-bold text-white/60 uppercase tracking-wide">
+                      {prevTraitProfile.profile_type}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-white/40 leading-relaxed">
+                  Continuing from your{prevTraitProfile.profile_type ? ` ${prevTraitProfile.profile_type}` : ''} profile. Your context will be loaded automatically.
+                </p>
+              </div>
+            )}
 
             {/* Pipeline / profile area */}
             {pipelineStage === 'done' ? (

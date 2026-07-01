@@ -16,6 +16,8 @@ import {
   Menu,
   X,
   MessageCircle,
+  TrendingUp,
+  Bookmark,
   LayoutDashboard,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -23,10 +25,12 @@ import { createClient } from '@/lib/supabase/client'
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Home' },
   { href: '/dashboard/profile', icon: User, label: 'Profile' },
-  { href: '/dashboard/degree-recommendation', icon: GraduationCap, label: 'Degree Recommendation' },
-  { href: '/dashboard/career-recommendation', icon: Briefcase, label: 'Career Recommendation' },
+  { href: '/dashboard/degree-recommendation', icon: GraduationCap, label: 'Degree Match' },
+  { href: '/dashboard/career-recommendation', icon: Briefcase, label: 'Career Match' },
+  { href: '/dashboard/my-conversations', icon: MessageSquare, label: 'Conversation' },
   { href: '/dashboard/roadmap', icon: Map, label: 'Roadmap' },
-  { href: '/dashboard/my-conversations', icon: MessageSquare, label: 'My Conversations' },
+  { href: '/dashboard/my-progress', icon: TrendingUp, label: 'My Progress' },
+  { href: '/dashboard/saved', icon: Bookmark, label: 'Saved' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -52,13 +56,11 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
     return () => document.removeEventListener('mousedown', handler)
   }, [avatarOpen])
 
-  // Auto-close drawers on route change
   useEffect(() => {
     setMobileOpen(false)
     setAvatarOpen(false)
   }, [pathname])
 
-  // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = 'hidden'
@@ -77,36 +79,39 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
   const initial = userName.charAt(0).toUpperCase()
 
   const SidebarContent = () => (
-    <>
-      <div className="p-5 border-b border-white/10 flex items-center justify-between">
+    <div className="flex flex-col h-full" style={{ background: 'linear-gradient(180deg, #05153b 0%, #040f28 100%)' }}>
+      {/* Logo */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/10">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
             <BrainCircuit size={16} className="text-white" />
           </div>
-          <span className="font-bold text-white text-base">Intelligente</span>
+          <span className="font-bold text-white text-base tracking-tight">Intelligente</span>
         </Link>
         <button
-          className="lg:hidden text-white/50 hover:text-white transition-colors p-1"
+          className="lg:hidden text-white/40 hover:text-white transition-colors p-1"
           onClick={() => setMobileOpen(false)}
         >
           <X size={18} />
         </button>
       </div>
 
+      {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map(({ href, icon: Icon, label }) => {
-          const isActive = pathname === href
+          const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 isActive
-                  ? 'bg-white/15 text-white font-medium'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+                  ? 'text-white font-medium shadow-sm'
+                  : 'text-white/55 hover:text-white hover:bg-white/8'
               }`}
+              style={isActive ? { backgroundColor: '#0b2968' } : undefined}
             >
-              <Icon size={16} className={isActive ? 'text-white' : 'text-white/50'} />
+              <Icon size={16} className={isActive ? 'text-white' : 'text-white/40'} />
               {label}
             </Link>
           )
@@ -115,44 +120,44 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
         <div className="pt-3 mt-3 border-t border-white/10">
           <Link
             href="/chat"
-            className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm bg-white/10 text-white hover:bg-white/20 transition-colors font-medium"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/8 transition-all font-medium"
           >
-            <MessageSquare size={16} />
-            Start New Conversation
+            <MessageSquare size={16} className="text-white/50" />
+            New Conversation
           </Link>
         </div>
       </nav>
 
-      <div className="p-4 border-t border-white/10">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+      {/* User footer */}
+      <div className="px-3 py-4 border-t border-white/10">
+        <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
+          <div className="w-8 h-8 rounded-full bg-[#0b2968] border border-white/20 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
             {initial}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-medium truncate">{userName}</p>
-            <p className="text-white/40 text-xs truncate">{userEmail}</p>
+            <p className="text-white/35 text-xs truncate">Student</p>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-colors text-sm"
+          className="flex items-center gap-2.5 w-full px-3 py-2 mt-1 rounded-lg text-white/45 hover:bg-white/8 hover:text-white transition-all text-sm"
         >
           <LogOut size={14} />
-          Sign Out
+          Logout
         </button>
       </div>
-    </>
+    </div>
   )
 
   return (
     <>
-      {/* Mobile top bar — only on small screens */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-[#0c1f4a] flex items-center justify-between px-4 border-b border-white/10">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="text-white/70 hover:text-white transition-colors p-1"
-          aria-label="Open menu"
-        >
+      {/* Mobile top bar */}
+      <div
+        className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 flex items-center justify-between px-4 border-b border-white/10"
+        style={{ background: '#05153b' }}
+      >
+        <button onClick={() => setMobileOpen(true)} className="text-white/70 hover:text-white transition-colors p-1">
           <Menu size={22} />
         </button>
         <Link href="/" className="flex items-center gap-2">
@@ -160,75 +165,63 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
           <span className="font-bold text-white text-sm">Intelligente</span>
         </Link>
 
-        {/* Avatar with dropdown */}
         <div className="relative" ref={avatarDropdownRef}>
           <button
             onClick={() => setAvatarOpen(!avatarOpen)}
-            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-sm font-semibold transition-colors"
-            aria-label="Account menu"
+            className="w-8 h-8 rounded-full bg-[#0b2968] border border-white/20 flex items-center justify-center text-white text-sm font-semibold"
           >
             {initial}
           </button>
 
           {avatarOpen && (
             <div className="absolute right-0 top-10 z-50 w-52 bg-white rounded-xl shadow-xl border border-[#e2e8f0] overflow-hidden">
-                {/* User info */}
-                <div className="px-4 py-3 border-b border-[#f1f5f9]">
-                  <p className="text-sm font-semibold text-[#0c1f4a] truncate">{userName}</p>
-                  <p className="text-xs text-[#94a3b8] truncate">{userEmail}</p>
-                </div>
-
-                {/* Actions */}
-                <div className="py-1.5">
-                  <Link href="/dashboard" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
-                    <LayoutDashboard size={14} className="text-[#64748b]" />
-                    Dashboard
-                  </Link>
-                  <Link href="/dashboard/profile" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
-                    <User size={14} className="text-[#64748b]" />
-                    My Profile
-                  </Link>
-                  <Link href="/chat" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
-                    <MessageCircle size={14} className="text-[#64748b]" />
-                    New Conversation
-                  </Link>
-                  <Link href="/dashboard/settings" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
-                    <Settings size={14} className="text-[#64748b]" />
-                    Settings
-                  </Link>
-                </div>
-
-                {/* Sign out */}
-                <div className="border-t border-[#f1f5f9] py-1.5">
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                  >
-                    <LogOut size={14} />
-                    Sign Out
-                  </button>
-                </div>
+              <div className="px-4 py-3 border-b border-[#f1f5f9]">
+                <p className="text-sm font-semibold text-[#0c1f4a] truncate">{userName}</p>
+                <p className="text-xs text-[#94a3b8] truncate">{userEmail}</p>
               </div>
+              <div className="py-1.5">
+                <Link href="/dashboard" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                  <LayoutDashboard size={14} className="text-[#64748b]" />
+                  Dashboard
+                </Link>
+                <Link href="/dashboard/profile" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                  <User size={14} className="text-[#64748b]" />
+                  My Profile
+                </Link>
+                <Link href="/chat" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                  <MessageCircle size={14} className="text-[#64748b]" />
+                  New Conversation
+                </Link>
+                <Link href="/dashboard/settings" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#f8fafc] transition-colors">
+                  <Settings size={14} className="text-[#64748b]" />
+                  Settings
+                </Link>
+              </div>
+              <div className="border-t border-[#f1f5f9] py-1.5">
+                <button onClick={handleLogout} className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                  <LogOut size={14} />
+                  Sign Out
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Overlay backdrop — mobile only */}
+      {/* Mobile overlay backdrop */}
       {mobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sidebar — drawer on mobile, static on desktop */}
+      {/* Sidebar */}
       <aside
         className={`
           fixed lg:relative top-0 left-0 h-full z-50
-          w-72 lg:w-64 flex-shrink-0 bg-[#0c1f4a] flex flex-col
+          w-60 flex-shrink-0 flex flex-col
           transition-transform duration-300 ease-in-out
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
+        style={{ background: 'linear-gradient(180deg, #05153b 0%, #040f28 100%)' }}
       >
         <SidebarContent />
       </aside>

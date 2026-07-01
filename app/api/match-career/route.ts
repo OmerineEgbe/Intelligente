@@ -18,43 +18,57 @@ export async function POST(req: Request) {
     const { text } = await generateText({
       model,
       system: CAREER_MATCHING_PROMPT,
-      prompt: `Match this student trait profile to LMUI programmes and careers:\n\n${JSON.stringify(trait_profile, null, 2)}`,
+      prompt: `Analyse this student trait profile and produce the three-phase career and degree match:\n\n${JSON.stringify(trait_profile, null, 2)}`,
       temperature: 0.1,
     })
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON in career matching response')
-    const matchResult = JSON.parse(jsonMatch[0])
+    const result = JSON.parse(jsonMatch[0])
 
-    // Save recommendations to Supabase
+    const { career_matches, degree_field, lmui_match, other_matches } = result
+
+    const primaryCareer = career_matches?.find((m: any) => m.is_primary) ?? career_matches?.[0]
+    const fitVerdict = primaryCareer?.fit_verdict === 'strong' ? 'strong_fit'
+      : primaryCareer?.fit_verdict === 'conditional' ? 'conditional_fit'
+      : 'misaligned'
+
+    // Save as a single recommendations row with full jsonb payload
     const admin = createAdminClient()
-    const savedRecs = []
+    const { data: rec, error } = await admin
+      .from('recommendations')
+      .insert({
+        user_id: user.id,
+        trait_profile_id,
+        fit_verdict: fitVerdict,
+        score: primaryCareer?.match_score ?? 0,
+        explanation: primaryCareer?.description ?? '',
+        is_alternative: false,
+        // New universal match columns
+        career_matches,
+        degree_field,
+        lmui_match,
+        other_matches,
+      })
+      .select()
+      .single()
 
-    for (const match of matchResult.matches) {
-      const { data: rec, error } = await admin
-        .from('recommendations')
-        .insert({
-          user_id: user.id,
-          trait_profile_id,
-          fit_verdict: match.fit_verdict,
-          score: match.fit_verdict === 'strong_fit' ? 90 : match.fit_verdict === 'conditional_fit' ? 65 : 30,
-          explanation: JSON.stringify({
-            programme_name: match.programme_name,
-            career_name: match.career_name,
-            reasoning: match.reasoning,
-            qualification_pathway: match.qualification_pathway,
-          }),
-          is_alternative: !match.is_primary,
-        })
-        .select()
-        .single()
+    if (error) throw new Error(`Failed to save recommendation: ${error.message}`)
 
-      if (!error && rec) savedRecs.push({ ...rec, match_data: match })
+    // Log unmatched degree fields for admin analytics
+    if (lmui_match && !lmui_match.available && lmui_match.unmatched_field) {
+      await admin.from('analytics').insert({
+        metric_name: `unmatched_degree_field:${lmui_match.unmatched_field}`,
+        metric_value: 1,
+      }).then(() => {}) // fire and forget
     }
 
     return Response.json({
-      recommendations: savedRecs,
-      matches: matchResult.matches,
+      recommendation: rec,
+      recommendations: [rec],
+      matches: career_matches,
+      degree_field,
+      lmui_match,
     })
   } catch (error) {
     console.error('Career matching error:', error)
