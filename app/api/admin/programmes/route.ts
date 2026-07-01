@@ -2,13 +2,18 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { checkPermission } from '@/lib/auth/permissions'
 import { NextResponse } from 'next/server'
 
-async function requireAdmin() {
+async function requireWrite() {
   const userId = await checkPermission('programmes:write')
   return userId ? { id: userId } : null
 }
 
+async function requireRead() {
+  const userId = await checkPermission('programmes:read')
+  return userId ? { id: userId } : null
+}
+
 export async function GET(req: Request) {
-  const user = await requireAdmin()
+  const user = await requireRead()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
@@ -36,7 +41,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const user = await requireAdmin()
+  const user = await requireWrite()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
@@ -70,7 +75,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const user = await requireAdmin()
+  const user = await requireWrite()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
@@ -90,7 +95,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const user = await requireAdmin()
+  const user = await requireWrite()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await req.json()

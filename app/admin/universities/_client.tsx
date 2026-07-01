@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { Plus, Search, Building2, Edit2, Trash2, ChevronRight, X, Check, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
 
 interface University {
   id: string
@@ -198,9 +199,9 @@ export function UniversitiesClient({ initialData }: { initialData: University[] 
                 <p className="text-[10px] text-[#94a3b8]">
                   Joined {new Date(u.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
-                <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0c1f4a] text-white text-xs font-medium hover:bg-[#1a3461] transition-colors">
+                <Link href={`/admin/universities/${u.id}`} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0c1f4a] text-white text-xs font-medium hover:bg-[#1a3461] transition-colors">
                   Manage <ChevronRight size={12} />
-                </button>
+                </Link>
               </div>
             </div>
           </div>

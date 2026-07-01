@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Search } from 'lucide-react'
+import { Bell, Search, ChevronLeft } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -8,9 +8,11 @@ import Link from 'next/link'
 interface Props {
   title: string
   subtitle: string
+  backHref?: string
+  backLabel?: string
 }
 
-export function AdminHeader({ title, subtitle }: Props) {
+export function AdminHeader({ title, subtitle, backHref, backLabel }: Props) {
   const [initials, setInitials] = useState('A')
   const [name, setName] = useState('Admin')
 
@@ -31,6 +33,11 @@ export function AdminHeader({ title, subtitle }: Props) {
   return (
     <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-[#e2e8f0] flex-shrink-0">
       <div>
+        {backHref && (
+          <Link href={backHref} className="flex items-center gap-1 text-xs text-[#94a3b8] hover:text-[#0c1f4a] transition-colors mb-1">
+            <ChevronLeft size={13} /> {backLabel ?? 'Back'}
+          </Link>
+        )}
         <h1 className="text-xl font-bold text-[#0c1f4a]">{title}</h1>
         <p className="text-xs text-[#64748b] mt-0.5">{subtitle}</p>
       </div>
