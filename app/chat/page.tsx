@@ -33,23 +33,79 @@ interface PastSession {
   started_at: string
 }
 
+// ── Thin loader — reads URL params, fetches session history if continuing ────
+
 export default function ChatPage() {
+  const [ready, setReady] = useState(false)
+  const [initMessages, setInitMessages] = useState<any[]>([])
+  const [preloadedSessionId, setPreloadedSessionId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const sid = params.get('session_id')
+    if (sid) {
+      fetch(`/api/session?session_id=${sid}`)
+        .then((r) => r.json())
+        .then(({ messages, session_id }) => {
+          setInitMessages(messages ?? [])
+          setPreloadedSessionId(session_id ?? sid)
+          setReady(true)
+        })
+        .catch(() => setReady(true))
+    } else {
+      setReady(true)
+    }
+  }, [])
+
+  if (!ready) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-white">
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="w-2 h-2 rounded-full bg-[#0c1f4a] animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ChatInner
+      key={preloadedSessionId ?? 'new'}
+      initialMessages={initMessages}
+      preloadedSessionId={preloadedSessionId}
+    />
+  )
+}
+
+// ── Main chat UI ─────────────────────────────────────────────────────────────
+
+function ChatInner({
+  initialMessages,
+  preloadedSessionId,
+}: {
+  initialMessages: any[]
+  preloadedSessionId: string | null
+}) {
   const router = useRouter()
-  // Sidebar closed by default on mobile, open on desktop via CSS
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [input, setInput] = useState('')
   const [userName, setUserName] = useState('')
   const [userEmail, setUserEmail] = useState('')
   const [userInitial, setUserInitial] = useState('U')
-  const [profileReady, setProfileReady] = useState(false)
+  const [profileReady, setProfileReady] = useState(
+    // If continuing a session, check if any init message contains <<PROFILE_READY>>
+    initialMessages.some((m) => m.role === 'assistant' && m.content?.includes('<<PROFILE_READY>>'))
+  )
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>('idle')
   const [pipelineError, setPipelineError] = useState('')
   const [pastSessions, setPastSessions] = useState<PastSession[]>([])
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [prevTraitProfile, setPrevTraitProfile] = useState<any>(null)
   const prevTraitProfileIdRef = useRef<string | null>(null)
+  // Session ID: use the preloaded one (continuing) or will be set after first message
+  const sessionIdRef = useRef<string | null>(preloadedSessionId)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
   const avatarDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -97,7 +153,6 @@ export default function ChatPage() {
     fetchSessions()
   }, [router, fetchSessions])
 
-  // Lock body scroll when sidebar overlay is open on mobile
   useEffect(() => {
     if (sidebarOpen) {
       document.body.style.overflow = 'hidden'
@@ -108,11 +163,29 @@ export default function ChatPage() {
   }, [sidebarOpen])
 
   const { messages, sendMessage, status, stop } = useChat({
+    messages: initialMessages,
     transport: new DefaultChatTransport({
       api: '/api/conversation',
-      fetch: (url, options) => {
-        const id = prevTraitProfileIdRef.current
-        const fullUrl = id ? `${url}?trait_profile_id=${id}` : url
+      fetch: async (url, options) => {
+        // Create a session on the first message if we don't have one yet
+        if (!sessionIdRef.current) {
+          try {
+            const res = await fetch('/api/session', { method: 'POST' })
+            const { session_id } = await res.json()
+            sessionIdRef.current = session_id
+          } catch {
+            // proceed without session saving
+          }
+        }
+
+        const traitId = prevTraitProfileIdRef.current
+        let fullUrl = url as string
+        if (traitId) fullUrl += `?trait_profile_id=${traitId}`
+        if (sessionIdRef.current) {
+          fullUrl += traitId
+            ? `&session_id=${sessionIdRef.current}`
+            : `?session_id=${sessionIdRef.current}`
+        }
         return fetch(fullUrl, options)
       },
     }),
@@ -135,13 +208,13 @@ export default function ChatPage() {
   const getMessageText = (msg: any): string =>
     getRawMessageText(msg).replace(/<<PROFILE_READY>>/g, '').trim()
 
+  // Scan ALL assistant messages — token may not be in the last one if student replied after
   useEffect(() => {
     if (profileReady || pipelineStage === 'done') return
-    const lastMsg = messages[messages.length - 1]
-    if (lastMsg?.role === 'assistant') {
-      const text = getRawMessageText(lastMsg)
-      if (text.includes('<<PROFILE_READY>>')) setProfileReady(true)
-    }
+    const found = messages.some(
+      (msg) => msg.role === 'assistant' && getRawMessageText(msg).includes('<<PROFILE_READY>>')
+    )
+    if (found) setProfileReady(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages])
 
@@ -179,13 +252,14 @@ export default function ChatPage() {
         body: JSON.stringify({ trait_profile, trait_profile_id }),
       })
       if (!matchRes.ok) throw new Error('Career matching failed')
-      const { matches, recommendation, primary_institution } = await matchRes.json()
+      const { matches, recommendation, primary_institution, degree_field } = await matchRes.json()
 
       setPipelineStage('roadmap')
       const primaryMatch = matches?.find((m: any) => m.is_primary) ?? matches?.[0]
+      const primaryMatchWithField = { ...primaryMatch, degree_field: degree_field ?? primaryMatch?.career_name }
       const roadmapRes = await fetch('/api/build-roadmap', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primary_match: primaryMatch, primary_institution, recommendation_id: recommendation.id }),
+        body: JSON.stringify({ primary_match: primaryMatchWithField, primary_institution, recommendation_id: recommendation.id }),
       })
       if (!roadmapRes.ok) throw new Error('Roadmap generation failed')
 
@@ -226,6 +300,8 @@ export default function ChatPage() {
     )
   }
 
+  const isContinuingSession = preloadedSessionId !== null && initialMessages.length > 0
+
   return (
     <div className="flex h-screen bg-white overflow-hidden">
 
@@ -262,16 +338,17 @@ export default function ChatPage() {
           <div className="flex flex-col flex-1 overflow-hidden p-3">
 
             {/* New conversation */}
-            <button
-              onClick={() => { setSidebarOpen(false); window.location.reload() }}
+            <Link
+              href="/chat"
+              onClick={() => setSidebarOpen(false)}
               className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg border border-white/10 text-white/80 hover:bg-white/10 hover:text-white transition-colors text-sm mb-3"
             >
               <Plus size={16} />
               New Conversation
-            </button>
+            </Link>
 
             {/* Returning student banner */}
-            {prevTraitProfile && (
+            {prevTraitProfile && !isContinuingSession && (
               <div className="mb-3 rounded-lg bg-white/5 border border-white/10 px-3 py-2.5">
                 <div className="flex items-center gap-2 mb-1">
                   <History size={13} className="text-[#93c5fd] flex-shrink-0" />
@@ -283,7 +360,20 @@ export default function ChatPage() {
                   )}
                 </div>
                 <p className="text-[11px] text-white/40 leading-relaxed">
-                  Continuing from your{prevTraitProfile.profile_type ? ` ${prevTraitProfile.profile_type}` : ''} profile. Your context will be loaded automatically.
+                  Your previous profile context will be included in this conversation.
+                </p>
+              </div>
+            )}
+
+            {/* Continuing session banner */}
+            {isContinuingSession && (
+              <div className="mb-3 rounded-lg bg-blue-500/10 border border-blue-400/20 px-3 py-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <MessageCircle size={13} className="text-[#93c5fd] flex-shrink-0" />
+                  <span className="text-xs font-semibold text-white/80">Continuing Session</span>
+                </div>
+                <p className="text-[11px] text-white/40 leading-relaxed">
+                  {initialMessages.length} messages loaded. Continue where you left off.
                 </p>
               </div>
             )}
@@ -346,25 +436,33 @@ export default function ChatPage() {
                 </p>
               ) : (
                 <div className="space-y-0.5">
-                  {pastSessions.map((s) => (
-                    <Link
-                      key={s.id}
-                      href={`/dashboard/my-conversations/${s.id}`}
-                      onClick={() => setSidebarOpen(false)}
-                      className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-colors group"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <MessageSquare size={12} className="flex-shrink-0 opacity-50" />
-                        <span className="text-xs truncate">Discovery Session</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                        <span className="text-[10px] text-white/30">{formatDate(s.started_at)}</span>
-                        {s.status === 'completed' && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                        )}
-                      </div>
-                    </Link>
-                  ))}
+                  {pastSessions.map((s, idx) => {
+                    const sessionNum = pastSessions.length - idx
+                    const time = new Date(s.started_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                    return (
+                      <Link
+                        key={s.id}
+                        href={`/chat?session_id=${s.id}`}
+                        onClick={() => setSidebarOpen(false)}
+                        className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-colors group ${
+                          s.id === preloadedSessionId
+                            ? 'bg-white/15 text-white'
+                            : 'text-white/60 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <MessageSquare size={12} className="flex-shrink-0 opacity-50" />
+                          <span className="text-xs truncate">Session #{sessionNum}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                          <span className="text-[10px] text-white/30">{formatDate(s.started_at)} {time}</span>
+                          {s.status === 'completed' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                          )}
+                        </div>
+                      </Link>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -393,7 +491,9 @@ export default function ChatPage() {
             <button onClick={() => setSidebarOpen(true)} className="text-[#64748b] hover:text-[#0c1f4a] transition-colors">
               <Menu size={20} />
             </button>
-            <span className="font-semibold text-[#0c1f4a] text-sm">Discovery Conversation</span>
+            <span className="font-semibold text-[#0c1f4a] text-sm">
+              {isContinuingSession ? 'Continuing Session' : 'Discovery Conversation'}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -472,6 +572,7 @@ export default function ChatPage() {
             <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
               {messages.map((msg, idx) => {
                 const text = getMessageText(msg)
+                if (!text) return null
                 return (
                   <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${msg.role === 'user' ? 'bg-[#0c1f4a] text-white' : 'bg-[#dbeafe] text-[#1a3461]'}`}>
@@ -507,7 +608,6 @@ export default function ChatPage() {
           <div className="max-w-3xl mx-auto">
             <div className="relative flex items-end gap-2 bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl px-4 py-3 focus-within:border-[#1a3461] focus-within:ring-2 focus-within:ring-[#1a3461]/10 transition-all">
               <textarea
-                ref={inputRef}
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value)
@@ -515,7 +615,7 @@ export default function ChatPage() {
                   e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="Share whatever comes to mind…"
+                placeholder={isContinuingSession ? 'Continue the conversation…' : 'Share whatever comes to mind…'}
                 rows={1}
                 disabled={isLoading || isPipelineRunning}
                 className="flex-1 bg-transparent resize-none text-sm text-[#0c1f4a] placeholder-[#94a3b8] focus:outline-none max-h-40 leading-relaxed"

@@ -29,8 +29,9 @@ export default async function MyConversationsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {sessions.map((session) => {
+          {sessions.map((session, idx) => {
             const date = new Date(session.started_at)
+            const sessionNum = sessions.length - idx
             return (
               <Link
                 key={session.id}
@@ -39,14 +40,16 @@ export default async function MyConversationsPage() {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-[#dbeafe] flex items-center justify-center flex-shrink-0 group-hover:bg-[#bfdbfe] transition-colors">
-                    <MessageSquare size={15} className="text-[#1a3461]" />
+                    <span className="text-xs font-bold text-[#1a3461]">{sessionNum}</span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-[#0c1f4a]">Discovery Session</p>
+                    <p className="text-sm font-medium text-[#0c1f4a]">Discovery Session #{sessionNum}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <Clock size={11} className="text-[#94a3b8]" />
                       <span className="text-xs text-[#94a3b8]">
                         {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {' · '}
+                        {date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${session.status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-[#fef3c7] text-yellow-700'}`}>
                         {session.status}

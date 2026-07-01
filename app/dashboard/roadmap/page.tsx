@@ -80,37 +80,37 @@ function ActionIcon({ type }: { type?: string }) {
 // ── Placeholder data (shown when pathway fields are missing) ───────────────
 
 const PLACEHOLDER_QUALIFICATIONS: Qualification[] = [
-  { name: 'HND Computer Engineering', duration: '2 Years' },
-  { name: 'Top-Up BTech Software Engineering', duration: '1 Year' },
-  { name: 'BTech Software Engineering', duration: 'Final Year' },
+  { name: 'HND', field: 'Your Field', duration: '2 Years' },
+  { name: 'Top-Up BTech', field: 'Your Field', duration: '1 Year' },
+  { name: 'BTech', field: 'Your Field', duration: 'Final Year' },
 ]
 
 const PLACEHOLDER_IMMEDIATE: ImmediateAction[] = [
-  { title: 'Research top-up degree entry requirements', description: 'Identify universities offering direct entry for HND holders.', type: 'research' },
-  { title: 'Gather and certify your HND transcripts', description: 'Contact your institution\'s registrar for official copies.', type: 'apply' },
-  { title: 'Build a simple portfolio project', description: 'Publish one project on GitHub to demonstrate practical skills.', type: 'build' },
-  { title: 'Join a developer community online', description: 'Engage on Stack Overflow, GitHub Discussions, or Discord.', type: 'network' },
+  { title: 'Research entry requirements', description: 'Identify universities offering the programme that matches your career goal.', type: 'research' },
+  { title: 'Gather your academic certificates', description: 'Contact your institution\'s registrar for certified copies of your transcripts.', type: 'apply' },
+  { title: 'Speak to a career advisor', description: 'Book a session to validate your career direction and explore programme options.', type: 'learn' },
+  { title: 'Join relevant professional communities', description: 'Connect with professionals in your target career on LinkedIn or local networks.', type: 'network' },
 ]
 
 const PLACEHOLDER_SEMESTER: SemesterMonth[] = [
-  { month: 'Month 1–2', actions: ['Complete top-up application forms', 'Request two academic references'] },
-  { month: 'Month 3–4', actions: ['Attend open days / virtual info sessions', 'Prepare personal statement'] },
-  { month: 'Month 5–6', actions: ['Finalise enrolment', 'Set up student tools and learning environment'] },
+  { month: 'Month 1–2', actions: ['Complete programme application forms', 'Request two academic references'] },
+  { month: 'Month 3–4', actions: ['Attend open days or virtual info sessions', 'Prepare your personal statement'] },
+  { month: 'Month 5–6', actions: ['Finalise enrolment', 'Set up tools and resources for your studies'] },
 ]
 
 const PLACEHOLDER_LONG_TERM: LongTermItem[] = [
-  { year: 'Year 1', title: 'Complete Top-Up Degree', description: 'Focus on core software engineering modules and capstone project.' },
-  { year: 'Year 2', title: 'First Industry Role', description: 'Target junior/graduate software engineer positions in Cameroon & the region.' },
-  { year: 'Year 3–5', title: 'Mid-Level Growth', description: 'Specialise in a domain (web, mobile, cloud) and take on leadership responsibilities.' },
+  { year: 'Year 1', title: 'Complete Your Programme', description: 'Focus on core modules and build a strong academic foundation in your chosen field.' },
+  { year: 'Year 2', title: 'Enter the Industry', description: 'Target entry-level roles in your career field in Cameroon and the wider region.' },
+  { year: 'Year 3–5', title: 'Grow and Specialise', description: 'Develop expertise in a niche area and take on greater responsibilities.' },
 ]
 
 const PLACEHOLDER_CAREER: CareerDestination = {
-  title: 'Software Engineer',
-  description: 'You will design, build, and maintain software solutions that power apps and technologies used by millions.',
-  salary_entry: '300,000 – 500,000 XAF / month',
-  salary_mid: '600,000 – 1,000,000 XAF / month',
-  salary_senior: '1,200,000 – 2,500,000 XAF / month',
-  industries: ['Tech', 'FinTech', 'Telecom', 'E-Commerce', 'Government IT'],
+  title: 'Your Career Goal',
+  description: 'Complete a discovery conversation to generate your personalised career roadmap with salary data and industry insights.',
+  salary_entry: '',
+  salary_mid: '',
+  salary_senior: '',
+  industries: [],
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────
@@ -120,13 +120,29 @@ export default async function RoadmapPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: roadmap } = await supabase
-    .from('roadmaps')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  const [{ data: roadmap }, { data: latestRec }] = await Promise.all([
+    supabase
+      .from('roadmaps')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single(),
+    supabase
+      .from('recommendations')
+      .select('institution_matches, degree_field')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  // Identify which institution the pathway is based on
+  const institutionMatches = (latestRec?.institution_matches as any[]) ?? []
+  const primaryInstitution = institutionMatches.find((m: any) => m.available) ?? null
+  const pathwayLabel = primaryInstitution
+    ? `${primaryInstitution.university_short ?? primaryInstitution.university_name} Qualification Pathway`
+    : 'General Career Pathway'
 
   // ── Empty state ──────────────────────────────────────────────────────────
   if (!roadmap) {
@@ -192,7 +208,12 @@ export default async function RoadmapPage() {
 
       {/* ── Section 1 — Qualification Pathway ──────────────────────────── */}
       <section className="bg-white rounded-2xl border border-[#e2e8f0] p-6 md:p-8">
-        <h2 className="text-base font-semibold text-[#0c1f4a] mb-6">Qualification Pathway</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-base font-semibold text-[#0c1f4a]">Qualification Pathway</h2>
+          <span className="text-xs text-[#64748b] bg-[#f1f5f9] px-2.5 py-1 rounded-full border border-[#e2e8f0]">
+            {pathwayLabel}
+          </span>
+        </div>
         <div className="flex flex-col md:flex-row items-start md:items-center gap-0 md:gap-0">
           {qualifications.map((q, i) => (
             <div key={i} className="flex flex-col md:flex-row items-start md:items-center flex-1 min-w-0">
@@ -202,7 +223,9 @@ export default async function RoadmapPage() {
                   <span className="text-xs font-bold text-[#1a3461]">{i + 1}</span>
                 </div>
                 <div className="md:text-center min-w-0">
-                  <p className="text-sm font-semibold text-[#0c1f4a] leading-tight">{q.name}</p>
+                  <p className="text-sm font-semibold text-[#0c1f4a] leading-tight">
+                    {q.field && q.field !== 'Your Field' ? `${q.name} ${q.field}` : q.name}
+                  </p>
                   <p className="text-xs text-[#64748b] mt-0.5">{q.duration}</p>
                 </div>
               </div>

@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Bookmark,
   LayoutDashboard,
+  ChevronLeft,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -34,6 +35,9 @@ const navItems = [
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ]
 
+const SIDEBAR_BG = 'linear-gradient(180deg, #05153b 0%, #040f28 100%)'
+const ACTIVE_BG = '#0b2968'
+
 interface DashboardSidebarProps {
   userName: string
   userEmail: string
@@ -43,6 +47,7 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const [avatarOpen, setAvatarOpen] = useState(false)
   const avatarDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -62,11 +67,7 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
   }, [pathname])
 
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = mobileOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [mobileOpen])
 
@@ -78,73 +79,118 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
 
   const initial = userName.charAt(0).toUpperCase()
 
-  const SidebarContent = () => (
-    <div className="flex flex-col h-full" style={{ background: 'linear-gradient(180deg, #05153b 0%, #040f28 100%)' }}>
+  const SidebarContent = ({ isDesktop }: { isDesktop?: boolean }) => (
+    <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/10">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+      <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
+        {(!isDesktop || !collapsed) && (
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+              <BrainCircuit size={16} className="text-white" />
+            </div>
+            <span className="font-bold text-white text-base tracking-tight">Intelligente</span>
+          </Link>
+        )}
+        {isDesktop && collapsed && (
+          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center mx-auto">
             <BrainCircuit size={16} className="text-white" />
           </div>
-          <span className="font-bold text-white text-base tracking-tight">Intelligente</span>
-        </Link>
-        <button
-          className="lg:hidden text-white/40 hover:text-white transition-colors p-1"
-          onClick={() => setMobileOpen(false)}
-        >
-          <X size={18} />
-        </button>
+        )}
+
+        {/* Desktop collapse toggle */}
+        {isDesktop && (
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            className={`text-white/40 hover:text-white transition-colors ${collapsed ? 'mx-auto mt-3' : 'ml-2'}`}
+          >
+            <ChevronLeft size={16} className={`transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+
+        {/* Mobile close */}
+        {!isDesktop && (
+          <button
+            className="text-white/40 hover:text-white transition-colors p-1"
+            onClick={() => setMobileOpen(false)}
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+          const isCollapsed = isDesktop && collapsed
           return (
             <Link
               key={href}
               href={href}
+              title={isCollapsed ? label : undefined}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 isActive
-                  ? 'text-white font-medium shadow-sm'
+                  ? 'text-white font-medium'
                   : 'text-white/55 hover:text-white hover:bg-white/8'
-              }`}
-              style={isActive ? { backgroundColor: '#0b2968' } : undefined}
+              } ${isCollapsed ? 'justify-center' : ''}`}
+              style={isActive ? { backgroundColor: ACTIVE_BG } : undefined}
             >
-              <Icon size={16} className={isActive ? 'text-white' : 'text-white/40'} />
-              {label}
+              <Icon size={16} className={`flex-shrink-0 ${isActive ? 'text-white' : 'text-white/40'}`} />
+              {!isCollapsed && <span>{label}</span>}
             </Link>
           )
         })}
 
-        <div className="pt-3 mt-3 border-t border-white/10">
-          <Link
-            href="/chat"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/8 transition-all font-medium"
-          >
-            <MessageSquare size={16} className="text-white/50" />
-            New Conversation
-          </Link>
-        </div>
+        {!(isDesktop && collapsed) && (
+          <div className="pt-3 mt-3 border-t border-white/10">
+            <Link
+              href="/chat"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/8 transition-all font-medium"
+            >
+              <MessageSquare size={16} className="text-white/50" />
+              New Conversation
+            </Link>
+          </div>
+        )}
+        {isDesktop && collapsed && (
+          <div className="pt-3 mt-3 border-t border-white/10 flex justify-center">
+            <Link
+              href="/chat"
+              title="New Conversation"
+              className="flex items-center justify-center p-2.5 rounded-lg text-white/55 hover:text-white hover:bg-white/8 transition-all"
+            >
+              <MessageSquare size={16} className="text-white/40" />
+            </Link>
+          </div>
+        )}
       </nav>
 
       {/* User footer */}
-      <div className="px-3 py-4 border-t border-white/10">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-          <div className="w-8 h-8 rounded-full bg-[#0b2968] border border-white/20 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-            {initial}
+      <div className="px-2 py-4 border-t border-white/10 space-y-1">
+        {!(isDesktop && collapsed) ? (
+          <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-[#0b2968] border border-white/20 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+              {initial}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-medium truncate">{userName}</p>
+              <p className="text-white/35 text-xs truncate">Student</p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">{userName}</p>
-            <p className="text-white/35 text-xs truncate">Student</p>
+        ) : (
+          <div className="flex justify-center py-2">
+            <div className="w-8 h-8 rounded-full bg-[#0b2968] border border-white/20 flex items-center justify-center text-white text-sm font-semibold">
+              {initial}
+            </div>
           </div>
-        </div>
+        )}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2.5 w-full px-3 py-2 mt-1 rounded-lg text-white/45 hover:bg-white/8 hover:text-white transition-all text-sm"
+          title={isDesktop && collapsed ? 'Sign Out' : undefined}
+          className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-white/45 hover:bg-white/8 hover:text-white transition-all text-sm ${isDesktop && collapsed ? 'justify-center' : ''}`}
         >
-          <LogOut size={14} />
-          Logout
+          <LogOut size={14} className="flex-shrink-0" />
+          {!(isDesktop && collapsed) && <span>Logout</span>}
         </button>
       </div>
     </div>
@@ -208,22 +254,25 @@ export function DashboardSidebar({ userName, userEmail }: DashboardSidebarProps)
         </div>
       </div>
 
-      {/* Mobile overlay backdrop */}
+      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sidebar */}
+      {/* Mobile sidebar (full width, slide in) */}
       <aside
-        className={`
-          fixed lg:relative top-0 left-0 h-full z-50
-          w-60 flex-shrink-0 flex flex-col
-          transition-transform duration-300 ease-in-out
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        `}
-        style={{ background: 'linear-gradient(180deg, #05153b 0%, #040f28 100%)' }}
+        className={`lg:hidden fixed top-0 left-0 h-full z-50 w-60 flex-shrink-0 transition-transform duration-300 ease-in-out ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ background: SIDEBAR_BG }}
       >
-        <SidebarContent />
+        <SidebarContent isDesktop={false} />
+      </aside>
+
+      {/* Desktop sidebar (collapsible) */}
+      <aside
+        className={`hidden lg:flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${collapsed ? 'w-16' : 'w-60'}`}
+        style={{ background: SIDEBAR_BG }}
+      >
+        <SidebarContent isDesktop={true} />
       </aside>
     </>
   )

@@ -26,23 +26,30 @@ export async function POST(req: Request) {
     if (!jsonMatch) throw new Error('No JSON in roadmap response')
     const roadmapData = JSON.parse(jsonMatch[0])
 
+    // Build career-level pathway steps using the degree field, not institution programme names.
+    // Institution-specific programme names should only appear if a user explicitly selects a university.
+    const degreeField = primary_match.degree_field ?? primary_match.career_name
+    const genericQualifications = [
+      { name: 'HND', field: degreeField, duration: '2 Years' },
+      { name: 'Top-Up BTech', field: degreeField, duration: '1 Year' },
+      { name: 'BTech', field: degreeField, duration: 'Final Year' },
+    ]
+
+    const careerDest = roadmapData.career_destination ?? {}
+
     // Build the full pathway object for the roadmap page
     const pathway = {
-      qualifications: primary_institution?.pathway ?? [
-        { name: 'HND', field: primary_match.career_name, duration: '2 Years' },
-        { name: 'Top-Up BTech', field: primary_match.career_name, duration: '1 Year' },
-        { name: 'BTech', field: primary_match.career_name, duration: 'Final Year' },
-      ],
+      qualifications: genericQualifications,
       immediate_actions: roadmapData.immediate_actions ?? [],
-      semester_plan: roadmapData.semester_plan ?? roadmapData.short_term_actions ?? [],
-      long_term: roadmapData.long_term ?? roadmapData.long_term_actions ?? [],
+      semester_plan: roadmapData.semester_plan ?? [],
+      long_term: roadmapData.long_term ?? [],
       career_destination: {
         title: primary_match.career_name,
         description: primary_match.description ?? '',
-        salary_entry: primary_match.typical_salary ?? '',
-        salary_mid: '',
-        salary_senior: '',
-        industries: [],
+        salary_entry: careerDest.salary_entry ?? primary_match.typical_salary ?? '',
+        salary_mid: careerDest.salary_mid ?? '',
+        salary_senior: careerDest.salary_senior ?? '',
+        industries: careerDest.industries ?? [],
       },
     }
 
@@ -53,8 +60,8 @@ export async function POST(req: Request) {
         user_id: user.id,
         recommendation_id,
         immediate_actions: roadmapData.immediate_actions,
-        short_term_actions: roadmapData.short_term_actions ?? roadmapData.semester_plan,
-        long_term_actions: roadmapData.long_term_actions ?? roadmapData.long_term,
+        short_term_actions: roadmapData.semester_plan,
+        long_term_actions: roadmapData.long_term,
         pathway,
       })
       .select()

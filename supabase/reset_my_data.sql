@@ -4,7 +4,7 @@
 -- HOW TO USE:
 --   1. Go to Supabase Dashboard → Authentication → Users
 --   2. Copy your user UUID
---   3. Replace YOUR_USER_UUID_HERE below with it
+--   3. Replace the UUID below (keep the single quotes)
 --   4. Run in SQL Editor
 --
 -- Your user account (auth.users + profiles) is NOT touched.
@@ -15,10 +15,12 @@ declare
   target_user uuid := 'YOUR_USER_UUID_HERE';
 begin
   -- Delete in reverse FK order to avoid constraint violations
+
   delete from roadmaps
-    where recommendation_id in (
-      select id from recommendations where user_id = target_user
-    );
+    where user_id = target_user
+       or recommendation_id in (
+         select id from recommendations where user_id = target_user
+       );
 
   delete from recommendations
     where user_id = target_user;
