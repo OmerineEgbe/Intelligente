@@ -1,25 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import {
-  ArrowRight,
-  GraduationCap,
-  Bell,
-  CheckCircle,
-} from 'lucide-react'
-
-interface DegreeMatch {
-  programme_name: string
-  school_name?: string
-  description?: string
-  match_score: number
-  duration?: string
-  entry_requirement?: string
-  mode?: string
-  fit_verdict: string
-  why_matched?: string[]
-  is_primary?: boolean
-}
+import { ArrowRight, GraduationCap, Bell, CheckCircle, Building2, Clock, BookOpen, ChevronRight } from 'lucide-react'
 
 export default async function DegreeRecommendationPage() {
   const supabase = await createClient()
@@ -28,20 +10,18 @@ export default async function DegreeRecommendationPage() {
 
   const { data: rec } = await supabase
     .from('recommendations')
-    .select('career_matches, degree_field, created_at')
+    .select('career_matches, degree_field, institution_matches, lmui_match, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
-  // degree_field stores the field name; we build a display from career_matches shape where possible.
-  // For the degree page we derive structured degree info from the recommendation row.
-  // If a dedicated degree table exists in future, swap this query.
+  const degreeField = rec?.degree_field as string | null
   const careerMatches = (rec?.career_matches ?? []) as any[]
-  const degreeField = rec?.degree_field ?? null
+  // institution_matches is the new scalable field; lmui_match is the legacy fallback
+  const institutionMatches = (rec?.institution_matches as any[]) ?? (rec?.lmui_match ? [rec.lmui_match] : [])
 
-  // Build a synthetic primary degree record from what we have
-  const hasDegreeData = degreeField !== null || careerMatches.length > 0
+  const hasDegreeData = degreeField || institutionMatches.length > 0
 
   if (!hasDegreeData) {
     return (
@@ -53,13 +33,8 @@ export default async function DegreeRecommendationPage() {
             <GraduationCap size={28} className="text-[#0c1f4a]" />
           </div>
           <h2 className="text-lg font-semibold text-[#0c1f4a] mb-2">No recommendations yet</h2>
-          <p className="text-[#94a3b8] text-sm mb-6">
-            Complete a conversation with Intelligente to get your matched LMUI programme.
-          </p>
-          <Link
-            href="/chat"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0c1f4a] text-white rounded-xl text-sm font-semibold hover:bg-[#1a3461] transition-colors"
-          >
+          <p className="text-[#94a3b8] text-sm mb-6">Complete a conversation with Intelligente to get your personalised degree matches.</p>
+          <Link href="/chat" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0c1f4a] text-white rounded-xl text-sm font-semibold hover:bg-[#1a3461] transition-colors">
             Start a Conversation <ArrowRight size={14} />
           </Link>
         </div>
@@ -67,210 +42,181 @@ export default async function DegreeRecommendationPage() {
     )
   }
 
-  // Derive primary programme details from available data
-  const primary = careerMatches.find((m: any) => m.is_primary) ?? careerMatches[0] ?? null
-  const primaryMatchScore = primary?.match_score ?? 85
-  const primaryCareerName = primary?.career_name ?? degreeField ?? 'Your Recommended Programme'
-  const whyMatched: string[] = primary?.why_matched ?? []
-  const others = careerMatches.filter((m: any) => m !== primary).slice(0, 3)
+  const primaryCareer = careerMatches.find((m: any) => m.is_primary) ?? careerMatches[0] ?? null
+  const whyMatched: string[] = primaryCareer?.why_matched ?? []
 
-  // Static LMUI degree display values — in production replace with DB degree data
-  const programmeName = degreeField
-    ? `BTech in ${degreeField}`
-    : `BTech in Software Engineering`
-  const schoolName = 'School of Engineering & Technology, LMUI'
-  const programmeDesc =
-    'This programme equips you with the technical foundation and problem-solving skills needed for a career in technology and engineering. Designed around industry needs, it bridges theory with hands-on application.'
+  // Split institutions: available first, then unavailable
+  const available = institutionMatches.filter((m: any) => m.available)
+  const unavailable = institutionMatches.filter((m: any) => !m.available)
+  const primaryInstitution = available[0] ?? null
+
+  const fitStyles: Record<string, string> = {
+    strong: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+    conditional: 'text-amber-600 bg-amber-50 border-amber-200',
+    misaligned: 'text-red-600 bg-red-50 border-red-200',
+    strong_fit: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+    conditional_fit: 'text-amber-600 bg-amber-50 border-amber-200',
+  }
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto">
+    <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6">
+
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0c1f4a] mb-1">Your Degree Recommendation</h1>
-          <p className="text-[#64748b] text-sm">Based on your profile, interests, and career goals.</p>
+          <h1 className="text-2xl font-bold text-[#0c1f4a]">Your Degree Recommendation</h1>
+          <p className="text-[#64748b] text-sm mt-0.5">Based on your profile, interests, and career goals.</p>
         </div>
-        <button className="w-9 h-9 rounded-xl border border-[#e2e8f0] bg-white flex items-center justify-center text-[#64748b] hover:bg-[#f8fafc] transition-colors">
-          <Bell size={16} />
+        <button className="p-2 rounded-lg border border-[#e2e8f0] text-[#64748b] hover:bg-[#f8fafc] transition-colors">
+          <Bell size={18} />
         </button>
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left panel — 2/3 */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Primary degree card */}
-          <div className="bg-white rounded-2xl border border-[#e2e8f0] p-6 shadow-sm">
-            {/* Badges */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-semibold">
-                <CheckCircle size={11} /> Best Match
-              </span>
-              <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#dbeafe] text-[#0c1f4a] text-xs font-bold">
-                Strong Fit
-              </span>
-            </div>
-
-            {/* Programme identity */}
-            <div className="mb-2">
-              <h2 className="text-xl font-bold text-[#0c1f4a] leading-tight mb-0.5">{programmeName}</h2>
-              <p className="text-xs text-[#94a3b8] font-medium">{schoolName}</p>
-            </div>
-            <p className="text-sm text-[#64748b] leading-relaxed mb-5">{programmeDesc}</p>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-              <div className="bg-[#f8fafc] rounded-xl p-3">
-                <p className="text-[10px] text-[#94a3b8] font-medium uppercase tracking-wide mb-1">Match Score</p>
-                <p className="text-sm font-bold text-[#0c1f4a]">{primaryMatchScore}%</p>
-              </div>
-              <div className="bg-[#f8fafc] rounded-xl p-3">
-                <p className="text-[10px] text-[#94a3b8] font-medium uppercase tracking-wide mb-1">Duration</p>
-                <p className="text-sm font-bold text-[#0c1f4a]">4 Years</p>
-              </div>
-              <div className="bg-[#f8fafc] rounded-xl p-3">
-                <p className="text-[10px] text-[#94a3b8] font-medium uppercase tracking-wide mb-1">Entry Requirement</p>
-                <p className="text-sm font-bold text-[#0c1f4a]">HND / A-Level</p>
-              </div>
-              <div className="bg-[#f8fafc] rounded-xl p-3">
-                <p className="text-[10px] text-[#94a3b8] font-medium uppercase tracking-wide mb-1">Mode</p>
-                <p className="text-sm font-bold text-[#0c1f4a]">Full-time</p>
-              </div>
-            </div>
-
-            {/* View careers link */}
-            <Link
-              href="/dashboard/career-recommendation"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-[#1a3461] hover:text-[#0c1f4a] transition-colors"
-            >
-              View Careers <ArrowRight size={11} />
-            </Link>
-          </div>
-
-          {/* Other good matches */}
-          {others.length > 0 && (
-            <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5 shadow-sm">
-              <h3 className="text-sm font-bold text-[#0c1f4a] mb-3">Other Good Matches</h3>
-              <div className="space-y-2">
-                {others.map((m: any, i: number) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-[#f8fafc] transition-colors cursor-pointer group border border-transparent hover:border-[#e2e8f0]"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-[#0c1f4a]">
-                        {m.career_name ? `BTech in ${m.career_name}` : `Programme ${i + 2}`}
-                      </p>
-                      <p className="text-xs text-[#94a3b8]">{schoolName}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-[#1a3461] bg-[#dbeafe] px-2 py-0.5 rounded-full">
-                        {m.match_score ?? 75}%
-                      </span>
-                      <ArrowRight size={14} className="text-[#94a3b8] group-hover:text-[#0c1f4a] transition-colors" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      {/* Degree field banner */}
+      <div className="bg-[#0c1f4a] rounded-2xl p-5 text-white flex items-center justify-between">
+        <div>
+          <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Your Degree Field</p>
+          <h2 className="text-xl font-bold">{degreeField ?? 'Your Recommended Field'}</h2>
+          {primaryCareer && (
+            <p className="text-white/60 text-sm mt-1">Leading to: {primaryCareer.career_name}</p>
           )}
         </div>
-
-        {/* Right panel — 1/3 */}
-        <div className="space-y-5">
-          {/* Why this fits */}
-          <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5 shadow-sm">
-            <h3 className="text-sm font-bold text-[#0c1f4a] mb-4">Why This Fits You</h3>
-            <ul className="space-y-3">
-              {(whyMatched.length > 0
-                ? whyMatched
-                : [
-                    'Aligned with your analytical strengths',
-                    'Matches your interest in technology',
-                    'Fits your preferred learning style',
-                    'Opens doors to your target career paths',
-                  ]
-              )
-                .slice(0, 4)
-                .map((reason: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2.5">
-                    <CheckCircle size={15} className="text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm text-[#64748b] leading-snug">{reason}</span>
-                  </li>
-                ))}
-            </ul>
-            <Link
-              href="/chat"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-[#1a3461] hover:text-[#0c1f4a] mt-4 transition-colors"
-            >
-              View Full Explanation <ArrowRight size={11} />
-            </Link>
-          </div>
-
-          {/* Academic pathway at LMUI */}
-          <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5 shadow-sm">
-            <h3 className="text-sm font-bold text-[#0c1f4a] mb-5">Your Academic Pathway at LMUI</h3>
-            <div className="flex items-stretch gap-0">
-              {/* Step 1 */}
-              <div className="flex flex-col items-center flex-1">
-                <div className="w-full bg-[#0c1f4a] text-white text-center rounded-xl py-2.5 px-2">
-                  <p className="text-[11px] font-bold leading-tight">HND</p>
-                </div>
-                <p className="text-[10px] text-[#94a3b8] mt-1.5 text-center">2 Years</p>
-              </div>
-              {/* Arrow */}
-              <div className="flex items-center px-1 pb-4">
-                <div className="w-4 h-0.5 bg-[#e2e8f0]" />
-                <div
-                  className="w-0 h-0"
-                  style={{
-                    borderTop: '4px solid transparent',
-                    borderBottom: '4px solid transparent',
-                    borderLeft: '6px solid #e2e8f0',
-                  }}
-                />
-              </div>
-              {/* Step 2 */}
-              <div className="flex flex-col items-center flex-1">
-                <div className="w-full bg-[#1a3461] text-white text-center rounded-xl py-2.5 px-2">
-                  <p className="text-[11px] font-bold leading-tight">Top-Up BTech</p>
-                </div>
-                <p className="text-[10px] text-[#94a3b8] mt-1.5 text-center">1 Year</p>
-              </div>
-              {/* Arrow */}
-              <div className="flex items-center px-1 pb-4">
-                <div className="w-4 h-0.5 bg-[#e2e8f0]" />
-                <div
-                  className="w-0 h-0"
-                  style={{
-                    borderTop: '4px solid transparent',
-                    borderBottom: '4px solid transparent',
-                    borderLeft: '6px solid #e2e8f0',
-                  }}
-                />
-              </div>
-              {/* Step 3 */}
-              <div className="flex flex-col items-center flex-1">
-                <div className="w-full bg-[#dbeafe] text-[#0c1f4a] text-center rounded-xl py-2.5 px-2">
-                  <p className="text-[11px] font-bold leading-tight">BTech</p>
-                </div>
-                <p className="text-[10px] text-[#94a3b8] mt-1.5 text-center">4 Years</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GraduationCap size={40} className="text-white/20 flex-shrink-0" />
       </div>
 
-      {/* Bottom banner */}
-      <div className="mt-6 bg-[#0c1f4a] rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p className="text-white text-sm font-medium text-center sm:text-left">
+      {/* Why this fits */}
+      {whyMatched.length > 0 && (
+        <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5">
+          <h3 className="text-sm font-bold text-[#0c1f4a] mb-3">Why This Field Fits You</h3>
+          <div className="space-y-2">
+            {whyMatched.map((reason: string, i: number) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <CheckCircle size={15} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-[#374151]">{reason}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Available institutions */}
+      {available.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold text-[#0c1f4a] mb-3 flex items-center gap-2">
+            <Building2 size={15} className="text-emerald-500" />
+            Universities That Offer This Programme
+          </h3>
+          <div className="space-y-4">
+            {available.map((inst: any, i: number) => (
+              <div key={i} className={`bg-white rounded-2xl border p-5 ${i === 0 ? 'border-[#0c1f4a]/20 shadow-md' : 'border-[#e2e8f0]'}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    {i === 0 && (
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mr-2">Best Match</span>
+                    )}
+                    <span className="text-xs font-semibold text-[#64748b]">{inst.university_name}</span>
+                    <h4 className="text-base font-bold text-[#0c1f4a] mt-1">
+                      {inst.qualification} {inst.programme_name}
+                    </h4>
+                    {inst.school && <p className="text-xs text-[#94a3b8] mt-0.5">{inst.school}</p>}
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-4">
+                    <p className="text-2xl font-bold text-[#0c1f4a]">{inst.match_score}%</p>
+                    <p className="text-[10px] text-[#94a3b8]">Match</p>
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {[
+                    { label: 'Duration', value: inst.duration ?? '—', icon: <Clock size={12} /> },
+                    { label: 'Entry', value: inst.entry_requirement ?? '—', icon: <BookOpen size={12} /> },
+                    { label: 'Mode', value: inst.mode ?? 'Full-time', icon: <GraduationCap size={12} /> },
+                  ].map(({ label, value, icon }) => (
+                    <div key={label} className="bg-[#f8fafc] rounded-xl p-3">
+                      <div className="flex items-center gap-1 text-[#94a3b8] mb-1">{icon}<span className="text-[10px]">{label}</span></div>
+                      <p className="text-xs font-semibold text-[#0c1f4a] leading-tight">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Why matched */}
+                {inst.why_matched?.length > 0 && (
+                  <div className="mb-4 space-y-1.5">
+                    {inst.why_matched.slice(0, 3).map((r: string, j: number) => (
+                      <div key={j} className="flex items-start gap-2">
+                        <CheckCircle size={13} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-[#374151]">{r}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Qualification pathway */}
+                {inst.pathway?.length > 0 && (
+                  <div className="pt-3 border-t border-[#f1f5f9]">
+                    <p className="text-[10px] text-[#94a3b8] uppercase tracking-widest mb-2">Academic Pathway</p>
+                    <div className="flex items-center gap-1.5 overflow-x-auto">
+                      {inst.pathway.map((step: any, j: number, arr: any[]) => (
+                        <div key={j} className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="text-center">
+                            <div className={`rounded-lg px-3 py-2 ${j === 0 ? 'bg-[#0c1f4a] text-white' : 'bg-[#f1f5f9] text-[#0c1f4a]'}`}>
+                              <p className="text-[10px] font-semibold opacity-70">{step.name}</p>
+                              <p className="text-xs font-bold">{step.duration}</p>
+                            </div>
+                          </div>
+                          {j < arr.length - 1 && <ChevronRight size={13} className="text-[#cbd5e1] flex-shrink-0" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Unavailable / coming soon institutions */}
+      {unavailable.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold text-[#94a3b8] mb-3 flex items-center gap-2">
+            <Building2 size={15} />
+            Other Universities
+          </h3>
+          <div className="space-y-3">
+            {unavailable.map((inst: any, i: number) => (
+              <div key={i} className="bg-[#f8fafc] rounded-xl border border-[#e2e8f0] p-4 flex items-start gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-sm text-[#0c1f4a]">{inst.university_name}</span>
+                    {inst.closest_alternative?.includes('Coming soon') ? (
+                      <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Coming Soon</span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-[#94a3b8] bg-white border border-[#e2e8f0] px-2 py-0.5 rounded-full">Not Available</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#94a3b8]">
+                    {inst.closest_alternative?.includes('Coming soon')
+                      ? 'This university will be added to Intelligente soon.'
+                      : inst.closest_alternative
+                        ? `Closest available: ${inst.closest_alternative}`
+                        : `${inst.unmatched_field ?? degreeField} is not currently offered at this institution.`}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Continue conversation banner */}
+      <div className="bg-[#f1f5f9] rounded-2xl border border-[#e2e8f0] p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <p className="text-sm text-[#374151]">
           Not sure? Continue the conversation to refine your matches even more.
         </p>
-        <Link
-          href="/chat"
-          className="flex-shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-white text-[#0c1f4a] rounded-xl text-sm font-bold hover:bg-[#f8fafc] transition-colors"
-        >
-          Continue Conversation <ArrowRight size={13} />
+        <Link href="/chat" className="flex-shrink-0 px-5 py-2.5 bg-[#0c1f4a] text-white rounded-xl text-sm font-semibold hover:bg-[#1a3461] transition-colors whitespace-nowrap">
+          Continue Conversation
         </Link>
       </div>
     </div>

@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (!user) return new Response('Unauthorized', { status: 401 })
 
   try {
-    const { primary_match, lmui_match, recommendation_id } = await req.json()
+    const { primary_match, primary_institution, recommendation_id } = await req.json()
     if (!primary_match || !recommendation_id) {
       return new Response('Bad Request', { status: 400 })
     }
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const { text } = await generateText({
       model,
       system: ROADMAP_ENGINE_PROMPT,
-      prompt: `Build a roadmap for this student.\n\nPrimary career match:\n${JSON.stringify(primary_match, null, 2)}\n\nLMUI programme match:\n${JSON.stringify(lmui_match ?? {}, null, 2)}`,
+      prompt: `Build a roadmap for this student.\n\nPrimary career match:\n${JSON.stringify(primary_match, null, 2)}\n\nPrimary institution match:\n${JSON.stringify(primary_institution ?? {}, null, 2)}`,
       temperature: 0.2,
     })
 
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
     // Build the full pathway object for the roadmap page
     const pathway = {
-      qualifications: lmui_match?.pathway ?? [
+      qualifications: primary_institution?.pathway ?? [
         { name: 'HND', field: primary_match.career_name, duration: '2 Years' },
         { name: 'Top-Up BTech', field: primary_match.career_name, duration: '1 Year' },
         { name: 'BTech', field: primary_match.career_name, duration: 'Final Year' },

@@ -179,13 +179,13 @@ export default function ChatPage() {
         body: JSON.stringify({ trait_profile, trait_profile_id }),
       })
       if (!matchRes.ok) throw new Error('Career matching failed')
-      const { matches, recommendation, lmui_match } = await matchRes.json()
+      const { matches, recommendation, primary_institution } = await matchRes.json()
 
       setPipelineStage('roadmap')
       const primaryMatch = matches?.find((m: any) => m.is_primary) ?? matches?.[0]
       const roadmapRes = await fetch('/api/build-roadmap', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primary_match: primaryMatch, lmui_match, recommendation_id: recommendation.id }),
+        body: JSON.stringify({ primary_match: primaryMatch, primary_institution, recommendation_id: recommendation.id }),
       })
       if (!roadmapRes.ok) throw new Error('Roadmap generation failed')
 
